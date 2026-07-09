@@ -42,6 +42,27 @@
   .cp-hero h1{font-size:38px; line-height:1.1; margin:0 0 16px; max-width:16ch;}
   .cp-hero p.lead{font-size:16.5px; line-height:1.6; color:var(--ink-soft); max-width:58ch; margin:0 0 26px;}
   .cp-hero-actions{display:flex; gap:12px; flex-wrap:wrap; margin-bottom:40px;}
+
+  .cp-quote-card{border:2px solid var(--ink); background:var(--card); border-radius:10px; padding:20px 22px; max-width:520px; position:relative; margin-bottom:56px;}
+  .cp-quote-card .tab{position:absolute; top:-13px; left:20px; background:var(--flag-bg); border:1.5px solid var(--flag); color:var(--flag); font-family:'JetBrains Mono',monospace; font-size:11px; padding:2px 8px; border-radius:4px;}
+  .cp-quote-card p{margin:6px 0 0; font-style:italic; color:var(--ink-soft); font-size:15px;}
+
+  .cp-grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:56px;}
+  @media (max-width:760px){.cp-grid3{grid-template-columns:1fr;}}
+  .cp-diffcard{border:1.5px solid var(--line); background:var(--card); border-radius:10px; padding:20px;}
+  .cp-diffcard .num{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--verified); font-weight:600;}
+  .cp-diffcard h3{font-size:17px; margin:8px 0 8px;}
+  .cp-diffcard p{font-size:14px; line-height:1.55; color:var(--ink-soft); margin:0;}
+
+  .cp-vs{border:2px solid var(--ink); border-radius:12px; overflow:hidden; margin-bottom:56px;}
+  .cp-vs-row{display:grid; grid-template-columns:1.2fr 1fr 1fr; border-bottom:1px solid var(--line);}
+  .cp-vs-row:last-child{border-bottom:none;}
+  .cp-vs-row > div{padding:12px 16px; font-size:13.5px;}
+  .cp-vs-row.head{background:var(--ink); color:var(--paper); font-weight:700; font-family:'JetBrains Mono',monospace; font-size:12px;}
+  .cp-vs-row:not(.head) > div:first-child{font-weight:600; background:var(--paper-dark);}
+  .cp-vs-row:not(.head) > div:nth-child(2){color:var(--flag);}
+  .cp-vs-row:not(.head) > div:nth-child(3){color:var(--verified); font-weight:600;}
+  @media (max-width:760px){.cp-vs-row, .cp-vs-row.head{grid-template-columns:1fr; }}
   .cp-btn{font-family:'Inter',sans-serif; font-weight:700; font-size:14px; padding:12px 20px; border-radius:8px; border:2px solid var(--ink); cursor:pointer; transition:transform .12s ease;}
   .cp-btn:hover{transform:translateY(-1px);}
   .cp-btn:focus-visible{outline:2px solid var(--verified); outline-offset:2px;}
@@ -148,14 +169,36 @@
   <!-- INICIO -->
   <div class="cp-view active" id="view-inicio">
     <div class="cp-hero">
-      <div class="cp-eyebrow">Piloto — dos o tres cursos por docente</div>
+      <div class="cp-eyebrow">No es un chatbot genérico</div>
       <h1>El asistente que solo sabe lo que vos le enseñaste.</h1>
-      <p class="lead">Cada docente entra con su propio código, crea sus cursos, sube el material (PDF o texto) y comparte un código de acceso con los alumnos. Todo queda separado por docente y por curso.</p>
+      <p class="lead">CoProfesor IA convierte el material de tu materia — apuntes, guías, bibliografía — en un asistente que responde a tus alumnos con tus fuentes, en tu programa, y que dice "no lo sé" cuando corresponde. Armalo en minutos, sin programar.</p>
       <div class="cp-hero-actions">
         <button class="cp-btn primary" data-goto="crear">Soy docente</button>
         <button class="cp-btn ghost" data-goto="alumno">Soy alumno, tengo un código</button>
       </div>
+      <div class="cp-quote-card">
+        <div class="tab">respuesta fuera de material</div>
+        <p>"Ese tema no forma parte del material proporcionado por el profesor."</p>
+      </div>
     </div>
+
+    <div class="cp-section-title"><h2>Por qué existe</h2><div class="line"></div></div>
+    <div class="cp-grid3">
+      <div class="cp-diffcard"><div class="num">01</div><h3>Para el docente</h3><p>Responde las mismas diez preguntas todos los años, a cualquier hora, sin restarle horas de clase ni de corrección. El profesor sigue siendo la autoridad del contenido; la IA solo lo distribuye.</p></div>
+      <div class="cp-diffcard"><div class="num">02</div><h3>Para el alumno</h3><p>Estudia con el apunte real de su cátedra, no con una respuesta genérica de internet que puede no coincidir con lo que se toma en el examen.</p></div>
+      <div class="cp-diffcard"><div class="num">03</div><h3>Para la institución</h3><p>Estandariza la calidad de la respuesta entre comisiones, deja trazabilidad de qué se enseña y detecta a tiempo dónde el curso se está quedando atrás.</p></div>
+    </div>
+
+    <div class="cp-section-title"><h2>CoProfesor IA vs. un chat de IA general</h2><div class="line"></div></div>
+    <div class="cp-vs">
+      <div class="cp-vs-row head"><div>Aspecto</div><div>ChatGPT / IA genérica</div><div>CoProfesor IA</div></div>
+      <div class="cp-vs-row"><div>Fuente de la respuesta</div><div>Todo internet, sin control del docente</div><div>Solo el material que subió el profesor</div></div>
+      <div class="cp-vs-row"><div>Cuando no sabe</div><div>Inventa una respuesta plausible</div><div>Dice que el tema no está en el material</div></div>
+      <div class="cp-vs-row"><div>Cita la fuente</div><div>Rara vez, y no es verificable</div><div>Siempre referencia el material cargado</div></div>
+      <div class="cp-vs-row"><div>Visibilidad del docente</div><div>Ninguna</div><div>Dashboard con temas y consultas</div></div>
+      <div class="cp-vs-row"><div>Configuración</div><div>Prompt genérico</div><div>Programa, nivel y tono definidos por la cátedra</div></div>
+    </div>
+
     <div class="cp-section-title"><h2>Cómo funciona el piloto</h2><div class="line"></div></div>
     <div class="cp-card" style="margin-bottom:20px;">
       <p style="margin:0 0 10px; font-size:14.5px; line-height:1.6;"><strong>1. El docente</strong> elige un código propio (ej: <span class="mono">profe_martina</span>), crea un curso, sube uno o varios PDF o pega texto. La IA solo va a usar eso.</p>
