@@ -1,57 +1,64 @@
-// Netlify Function: /.netlify/functions/chat
+// Función de Netlify: /.netlify/functions/chat
 // Recibe { system, message } desde el navegador y llama a la API de Anthropic
-// usando la API key guardada como variable de entorno (nunca viaja al cliente).
+// usando la clave API guardada como variable de entorno (nunca viaja al cliente).
 
 export default async (req) => {
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Método no permitido' }), { status: 405 });
+    return new Response(JSON.stringify({ error: 'Método no permitido' }), { estado: 405 });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return new Response(
+
+  // --- LOG TEMPORAL DE DIAGNÓSTICO: borrar estas 3 líneas cuando funciona ---
+  console.log('DEBUG apiKey existe:', !!apiKey);
+  console.log('DEBUG apiKey longitud:', apiKey ? apiKey.length : 0);
+  console.log('DEBUG apiKey ultimos 4:', apiKey ? apiKey.slice(-4) : 'N/A');
+  // --- REGISTRO TEMPORAL FINAL ---
+
+  si (!apiKey) {
+    devolver nueva Respuesta(
       JSON.stringify({ error: 'Falta configurar la variable de entorno ANTHROPIC_API_KEY en Netlify.' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 
-  try {
-    const { system, message } = await req.json();
-    if (!message) {
-      return new Response(JSON.stringify({ error: 'Falta el mensaje.' }), { status: 400 });
+  intentar {
+    const { sistema, mensaje } = await req.json();
+    si (!mensaje) {
+      return new Response(JSON.stringify({ error: 'Falta el mensaje.' }), { estado: 400 });
     }
 
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
+      método: 'POST',
+      encabezados: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
+        'x-api-key': clave de API,
+        'versión antrópica': '2023-06-01'
       },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: system || '',
-        messages: [{ role: 'user', content: message }]
+      cuerpo: JSON.stringify({
+        modelo: 'claude-soneto-4-6',
+        tokens_máximos: 1000,
+        sistema: sistema || '',
+        mensajes: [{ rol: 'usuario', contenido: mensaje }]
       })
     });
 
     const data = await anthropicRes.json();
-    if (!anthropicRes.ok) {
+    si (!anthropicRes.ok) {
       return new Response(JSON.stringify({ error: data.error?.message || 'Error llamando a la API de Claude.' }), {
-        status: anthropicRes.status,
-        headers: { 'Content-Type': 'application/json' }
+        estado: anthropicRes.status,
+        encabezados: { 'Content-Type': 'application/json' }
       });
     }
 
     return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      estado: 200,
+      encabezados: { 'Content-Type': 'application/json' }
     });
-  } catch (e) {
+  } capturar (e) {
     return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      estado: 500,
+      encabezados: { 'Content-Type': 'application/json' }
     });
   }
 };
