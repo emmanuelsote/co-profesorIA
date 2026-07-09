@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoProfesor IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<style>
+  body{margin:0;}
+  :root{
+    --ink:#1b2a4a; --ink-soft:#41507a; --paper:#f2f0e3; --paper-dark:#e7e2cf;
+    --card:#fbfaf4; --highlighter:#f2b705; --verified:#2f6e5b; --verified-bg:#e4efe9;
+    --flag:#8b3a3a; --flag-bg:#f3e4e0; --line:#c9c2ac;
+  }
+  *{box-sizing:border-box;}
+  #cp-root{
+    font-family:'Inter',sans-serif; color:var(--ink); background:var(--paper);
+    background-image:repeating-linear-gradient(180deg, transparent, transparent 35px, rgba(27,42,74,0.05) 36px);
+    min-height:100%;
+  }
+  #cp-root h1,#cp-root h2,#cp-root h3,#cp-root .display{font-family:'Fraunces',serif; font-weight:600; letter-spacing:-0.01em;}
+  #cp-root .mono{font-family:'JetBrains Mono',monospace;}
+
+  .cp-nav{display:flex; align-items:center; justify-content:space-between; padding:16px 24px; border-bottom:2px solid var(--ink); background:var(--paper); position:sticky; top:0; z-index:20; flex-wrap:wrap; gap:10px;}
+  .cp-brand{display:flex; align-items:center; gap:10px;}
+  .cp-brand .mark{width:28px;height:28px; border:2px solid var(--ink); border-radius:3px; display:flex;align-items:center;justify-content:center; font-family:'Fraunces',serif; font-weight:700; font-size:14px; background:var(--highlighter); flex:none;}
+  .cp-brand span{font-family:'Fraunces',serif; font-weight:600; font-size:17px;}
+  .cp-tabs{display:flex; gap:4px; flex-wrap:wrap;}
+  .cp-tab{font-family:'Inter',sans-serif; font-size:13px; font-weight:600; padding:8px 13px; border-radius:999px; border:1.5px solid transparent; background:none; color:var(--ink-soft); cursor:pointer; transition:all .15s ease;}
+  .cp-tab:hover{border-color:var(--line);}
+  .cp-tab.active{background:var(--ink); color:var(--paper);}
+  .cp-tab:focus-visible{outline:2px solid var(--verified); outline-offset:2px;}
+
+  .cp-view{display:none; padding:40px 24px 90px; max-width:960px; margin:0 auto;}
+  .cp-view.active{display:block;}
+
+  .cp-eyebrow{font-family:'JetBrains Mono',monospace; font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--verified); display:flex; align-items:center; gap:8px; margin-bottom:12px;}
+  .cp-eyebrow::before{content:''; width:8px;height:8px;background:var(--highlighter); border:1.5px solid var(--ink); display:inline-block;}
+  .cp-hero h1{font-size:38px; line-height:1.1; margin:0 0 16px; max-width:16ch;}
+  .cp-hero p.lead{font-size:16.5px; line-height:1.6; color:var(--ink-soft); max-width:58ch; margin:0 0 26px;}
+  .cp-hero-actions{display:flex; gap:12px; flex-wrap:wrap; margin-bottom:40px;}
+  .cp-btn{font-family:'Inter',sans-serif; font-weight:700; font-size:14px; padding:12px 20px; border-radius:8px; border:2px solid var(--ink); cursor:pointer; transition:transform .12s ease;}
+  .cp-btn:hover{transform:translateY(-1px);}
+  .cp-btn:focus-visible{outline:2px solid var(--verified); outline-offset:2px;}
+  .cp-btn.primary{background:var(--ink); color:var(--paper);}
+  .cp-btn.ghost{background:transparent; color:var(--ink);}
+  .cp-btn:disabled{opacity:.45; cursor:default; transform:none;}
+
+  .cp-section-title{display:flex; align-items:baseline; gap:10px; margin:0 0 18px;}
+  .cp-section-title h2{font-size:22px; margin:0;}
+  .cp-section-title .line{flex:1; height:1.5px; background:var(--line);}
+
+  .cp-card{background:var(--card); border:1.5px solid var(--line); border-radius:12px; padding:22px;}
+  .cp-field{margin-bottom:16px;}
+  .cp-field label{display:block; font-size:13px; font-weight:700; margin-bottom:6px;}
+  .cp-field .hint{font-size:12px; color:var(--ink-soft); margin-top:4px;}
+  .cp-field input[type=text], .cp-field textarea, .cp-field select{width:100%; font-family:'Inter',sans-serif; font-size:14px; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);}
+  .cp-field textarea{min-height:110px; resize:vertical; font-family:'JetBrains Mono',monospace; font-size:12.5px; line-height:1.6;}
+  .cp-field input:focus, .cp-field textarea:focus, .cp-field select:focus{outline:2px solid var(--verified); outline-offset:1px; border-color:var(--verified);}
+  .cp-chiprow{display:flex; gap:8px; flex-wrap:wrap;}
+  .cp-chip{font-size:13px; padding:8px 14px; border-radius:999px; border:1.5px solid var(--line); background:#fff; cursor:pointer; font-weight:600; color:var(--ink-soft);}
+  .cp-chip.selected{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+  .cp-smallbtn{font-size:12.5px; font-weight:700; padding:7px 12px; border-radius:6px; border:1.5px solid var(--ink); background:transparent; cursor:pointer; color:var(--ink);}
+  .cp-smallbtn.solid{background:var(--ink); color:var(--paper);}
+  .cp-smallbtn.danger{border-color:var(--flag); color:var(--flag);}
+
+  /* Identificacion docente */
+  .cp-gate{border:2px dashed var(--line); border-radius:12px; padding:22px; margin-bottom:26px; background:var(--card);}
+  .cp-gate.active{border-style:solid; border-color:var(--verified); background:var(--verified-bg);}
+  .cp-gate-row{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;}
+  .cp-gate-row .cp-field{flex:1; min-width:220px; margin-bottom:0;}
+  .cp-gate-who{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .cp-gate-who strong{font-family:'Fraunces',serif; font-size:16px;}
+
+  .cp-materia-list{display:grid; gap:12px; margin-top:24px;}
+  .cp-materia-item{border:1.5px solid var(--line); background:var(--card); border-radius:10px; padding:14px 16px;}
+  .cp-materia-item .top{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;}
+  .cp-materia-item h4{margin:0 0 4px; font-size:16px; font-family:'Fraunces',serif;}
+  .cp-materia-item .meta{font-size:12px; color:var(--ink-soft); font-family:'JetBrains Mono',monospace;}
+  .cp-joincode{display:inline-flex; align-items:center; gap:6px; background:var(--highlighter); border:1.5px solid var(--ink); border-radius:6px; padding:4px 10px; font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; margin-top:8px;}
+  .cp-doclist{margin-top:12px; border-top:1px dashed var(--line); padding-top:10px;}
+  .cp-doc-row{display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:12.5px; gap:8px;}
+  .cp-doc-row .name{font-weight:600;}
+  .cp-doc-row .meta{color:var(--ink-soft); font-family:'JetBrains Mono',monospace; font-size:11px;}
+  .cp-upload-row{display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap;}
+  .cp-dropzone{border:2px dashed var(--line); border-radius:10px; padding:16px; text-align:center; font-size:13px; color:var(--ink-soft); cursor:pointer; transition:all .15s ease; flex:1; min-width:220px;}
+  .cp-dropzone.drag{border-color:var(--verified); background:var(--verified-bg); color:var(--verified);}
+  .cp-dropzone input{display:none;}
+
+  .cp-empty{color:var(--ink-soft); font-size:14px; padding:32px 20px; text-align:center;}
+
+  /* Alumno: entrada por codigo */
+  .cp-joinbox{max-width:420px;}
+  .cp-joinbox input{text-transform:uppercase; letter-spacing:.08em; font-family:'JetBrains Mono',monospace; font-weight:700; text-align:center; font-size:18px;}
+
+  .cp-chat-wrap{display:grid; grid-template-columns:200px 1fr; gap:20px;}
+  @media (max-width:760px){.cp-chat-wrap{grid-template-columns:1fr;} .cp-hero h1{font-size:29px;}}
+  .cp-chat-side{border-right:1.5px dashed var(--line); padding-right:16px;}
+  .cp-chat-side h4{font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:0 0 10px; font-family:'JetBrains Mono',monospace;}
+  .cp-mode{display:block; width:100%; text-align:left; padding:8px 10px; border-radius:7px; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:12.5px; margin-bottom:6px; color:var(--ink-soft);}
+  .cp-mode.selected{background:var(--highlighter); border-color:var(--ink); color:var(--ink); font-weight:700;}
+
+  .cp-chat-box{border:2px solid var(--ink); border-radius:12px; background:var(--card); display:flex; flex-direction:column; height:540px;}
+  .cp-chat-log{flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px;}
+  .cp-msg{max-width:82%; padding:11px 13px; border-radius:10px; font-size:13.5px; line-height:1.55;}
+  .cp-msg.user{align-self:flex-end; background:var(--ink); color:var(--paper); border-bottom-right-radius:2px;}
+  .cp-msg.ai{align-self:flex-start; background:#fff; border:1.5px solid var(--line); border-bottom-left-radius:2px;}
+  .cp-msg.ai.grounded{border-color:var(--verified);}
+  .cp-msg.ai.flagged{border-color:var(--flag);}
+  .cp-stamp{display:inline-flex; align-items:center; gap:5px; font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 7px; border-radius:4px; margin-bottom:6px; font-weight:600;}
+  .cp-stamp.grounded{background:var(--verified-bg); color:var(--verified);}
+  .cp-stamp.flagged{background:var(--flag-bg); color:var(--flag);}
+  .cp-chat-input{display:flex; gap:8px; padding:12px; border-top:1.5px solid var(--line);}
+  .cp-chat-input input{flex:1; padding:10px 13px; border-radius:8px; border:1.5px solid var(--line); font-size:13.5px; font-family:'Inter',sans-serif;}
+  .cp-chat-input input:focus{outline:2px solid var(--verified); border-color:var(--verified);}
+  .cp-send{padding:10px 16px; border-radius:8px; border:none; background:var(--ink); color:var(--paper); font-weight:700; cursor:pointer;}
+  .cp-send:disabled{opacity:.5; cursor:default;}
+
+  .cp-stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:26px;}
+  @media (max-width:760px){.cp-stat-grid{grid-template-columns:1fr 1fr;}}
+  .cp-stat{border:1.5px solid var(--line); background:var(--card); border-radius:10px; padding:15px;}
+  .cp-stat .n{font-family:'Fraunces',serif; font-size:28px; font-weight:700; line-height:1;}
+  .cp-stat .l{font-size:11.5px; color:var(--ink-soft); margin-top:6px; text-transform:uppercase; letter-spacing:.04em;}
+  .cp-topic-row{display:flex; justify-content:space-between; align-items:center; padding:8px 0 2px; border-bottom:1px solid var(--line); font-size:13px;}
+  .cp-bar{height:5px; background:var(--highlighter); border-radius:3px; margin:5px 0 8px;}
+  .cp-log-row{border-bottom:1px solid var(--line); padding:11px 0; font-size:12.5px;}
+  .cp-log-row .q{font-weight:600;}
+  .cp-log-row .meta{color:var(--ink-soft); font-family:'JetBrains Mono',monospace; font-size:10.5px; margin-top:3px;}
+
+  .cp-toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--paper); padding:11px 18px; border-radius:8px; font-size:13px; z-index:50; box-shadow:0 6px 20px rgba(0,0,0,.2); max-width:90vw;}
+</style>
+
+</head>
+<body>
+<div id="cp-root">
+  <div class="cp-nav">
+    <div class="cp-brand"><div class="mark">C</div><span>CoProfesor IA</span></div>
+    <div class="cp-tabs">
+      <button class="cp-tab active" data-view="inicio">Inicio</button>
+      <button class="cp-tab" data-view="crear">Panel docente</button>
+      <button class="cp-tab" data-view="alumno">Ingresar como alumno</button>
+    </div>
+  </div>
+
+  <!-- INICIO -->
+  <div class="cp-view active" id="view-inicio">
+    <div class="cp-hero">
+      <div class="cp-eyebrow">Piloto — dos o tres cursos por docente</div>
+      <h1>El asistente que solo sabe lo que vos le enseñaste.</h1>
+      <p class="lead">Cada docente entra con su propio código, crea sus cursos, sube el material (PDF o texto) y comparte un código de acceso con los alumnos. Todo queda separado por docente y por curso.</p>
+      <div class="cp-hero-actions">
+        <button class="cp-btn primary" data-goto="crear">Soy docente</button>
+        <button class="cp-btn ghost" data-goto="alumno">Soy alumno, tengo un código</button>
+      </div>
+    </div>
+    <div class="cp-section-title"><h2>Cómo funciona el piloto</h2><div class="line"></div></div>
+    <div class="cp-card" style="margin-bottom:20px;">
+      <p style="margin:0 0 10px; font-size:14.5px; line-height:1.6;"><strong>1. El docente</strong> elige un código propio (ej: <span class="mono">profe_martina</span>), crea un curso, sube uno o varios PDF o pega texto. La IA solo va a usar eso.</p>
+      <p style="margin:0 0 10px; font-size:14.5px; line-height:1.6;"><strong>2. El sistema genera un código de curso</strong> de 6 caracteres. El docente se lo pasa a sus alumnos (por WhatsApp, classroom, etc).</p>
+      <p style="margin:0; font-size:14.5px; line-height:1.6;"><strong>3. El alumno</strong> entra a "Ingresar como alumno", escribe el código y chatea directamente con el material de ese curso — sin ver los otros cursos ni los de otros docentes.</p>
+    </div>
+  </div>
+
+  <!-- PANEL DOCENTE (crear + gestionar + stats) -->
+  <div class="cp-view" id="view-crear">
+    <div class="cp-section-title"><h2>Panel docente</h2><div class="line"></div></div>
+
+    <div class="cp-gate" id="cp-gate">
+      <div class="cp-gate-row">
+        <div class="cp-field">
+          <label for="cp-docente-code">Tu código de docente</label>
+          <input type="text" id="cp-docente-code" placeholder="ej: profe_martina">
+          <div class="hint">Inventalo vos. Usá siempre el mismo para ver tus cursos la próxima vez.</div>
+        </div>
+        <button class="cp-btn primary" id="cp-docente-entrar">Entrar</button>
+      </div>
+    </div>
+
+    <div id="cp-docente-panel" style="display:none;">
+
+      <div class="cp-card">
+        <div class="cp-field">
+          <label for="cp-nombre">Nombre del curso / materia</label>
+          <input type="text" id="cp-nombre" placeholder="Ej: Historia Argentina II — Comisión 3">
+        </div>
+        <div class="cp-field">
+          <label for="cp-nivel">Nivel</label>
+          <select id="cp-nivel">
+            <option>Secundario</option><option>Terciario</option><option>Universidad</option><option>Academia privada</option>
+          </select>
+        </div>
+        <div class="cp-field">
+          <label>Tono del asistente</label>
+          <div class="cp-chiprow" id="cp-tono-chips">
+            <button class="cp-chip selected" data-tono="cercano">Cercano y motivador</button>
+            <button class="cp-chip" data-tono="formal">Formal y académico</button>
+            <button class="cp-chip" data-tono="directo">Directo, sin rodeos</button>
+          </div>
+        </div>
+        <button class="cp-btn primary" id="cp-crear-btn">Crear curso</button>
+      </div>
+
+      <div class="cp-section-title" style="margin-top:36px;"><h2>Tus cursos</h2><div class="line"></div></div>
+      <div class="cp-materia-list" id="cp-materia-list"><div class="cp-empty">Todavía no creaste ningún curso.</div></div>
+
+      <div class="cp-section-title" style="margin-top:36px;"><h2>Estadísticas del curso</h2><div class="line"></div></div>
+      <div id="cp-docente-content"><div class="cp-empty">Elegí un curso arriba para ver sus estadísticas.</div></div>
+    </div>
+  </div>
+
+  <!-- ALUMNO -->
+  <div class="cp-view" id="view-alumno">
+    <div class="cp-section-title"><h2>Ingresar como alumno</h2><div class="line"></div></div>
+
+    <div class="cp-gate cp-joinbox" id="cp-alumno-gate">
+      <div class="cp-field">
+        <label for="cp-join-code">Código del curso</label>
+        <input type="text" id="cp-join-code" placeholder="EJ4X9K" maxlength="8">
+        <div class="hint" style="text-align:center;">Pedíselo a tu profesor.</div>
+      </div>
+      <button class="cp-btn primary" id="cp-join-btn" style="width:100%;">Entrar al curso</button>
+    </div>
+
+    <div id="cp-alumno-chat" style="display:none;">
+      <div class="cp-section-title"><h2 id="cp-alumno-curso-nombre" style="font-size:20px;"></h2><div class="line"></div></div>
+      <div class="cp-chat-wrap">
+        <div class="cp-chat-side">
+          <h4>Modo</h4>
+          <button class="cp-mode selected" data-mode="normal">Preguntar normal</button>
+          <button class="cp-mode" data-mode="simple">Explícamelo simple</button>
+          <button class="cp-mode" data-mode="pista">Solo dame una pista</button>
+          <button class="cp-mode" data-mode="evaluame">Evaluame con una pregunta</button>
+          <button class="cp-mode" data-mode="resumen">Hacé un resumen del tema</button>
+          <button class="cp-smallbtn" id="cp-salir-curso" style="margin-top:16px;">Salir del curso</button>
+        </div>
+        <div>
+          <div class="cp-chat-box">
+            <div class="cp-chat-log" id="cp-chat-log"></div>
+            <div class="cp-chat-input">
+              <input type="text" id="cp-chat-input" placeholder="Escribí tu pregunta sobre el curso...">
+              <button class="cp-send" id="cp-chat-send">Enviar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = (sel, ctx) => (ctx||document).querySelector(sel);
+  const $$ = (sel, ctx) => Array.from((ctx||document).querySelectorAll(sel));
+
+  if(window.pdfjsLib){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  let allMaterias = [];       // todas las materias (shared) — se filtra en pantalla por docenteCode
+  let docenteCode = null;
+  let currentMateriaId = null; // seleccionada en panel docente
+  let currentMode = 'normal';
+  let currentTono = 'cercano';
+  let alumnoMateria = null;    // materia activa del lado alumno
+
+  function toast(msg){
+    const t = document.createElement('div');
+    t.className = 'cp-toast'; t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(), 2800);
+  }
+  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function genCode(len){
+    const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s=''; for(let i=0;i<len;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+    return s;
+  }
+
+  // ---------- storage: habla con la función serverless /.netlify/functions/storage (Netlify Blobs) ----------
+  async function storageGet(key){
+    try{
+      const r = await fetch('/.netlify/functions/storage', {method:'POST', body: JSON.stringify({action:'get', key})});
+      const d = await r.json();
+      return d.value != null ? d.value : null;
+    }catch(e){ return null; }
+  }
+  async function storageSet(key, value){
+    try{
+      await fetch('/.netlify/functions/storage', {method:'POST', body: JSON.stringify({action:'set', key, value})});
+    }catch(e){ toast('No se pudo guardar. Revisá tu conexión.'); }
+  }
+
+  async function loadAllMaterias(){
+    const v = await storageGet('materias');
+    allMaterias = v ? JSON.parse(v) : [];
+  }
+  async function saveAllMaterias(){
+    await storageSet('materias', JSON.stringify(allMaterias));
+  }
+  async function loadConsultas(materiaId){
+    const v = await storageGet('consultas:'+materiaId);
+    return v ? JSON.parse(v) : [];
+  }
+  async function saveConsultas(materiaId, arr){
+    await storageSet('consultas:'+materiaId, JSON.stringify(arr));
+  }
+  async function rememberDocenteCode(code){
+    localStorage.setItem('mi_codigo_docente', code);
+  }
+  async function getRememberedDocenteCode(){
+    return localStorage.getItem('mi_codigo_docente') || '';
+  }
+
+  // ---------- nav ----------
+  $$('.cp-tab').forEach(btn=> btn.addEventListener('click', ()=> switchView(btn.dataset.view)));
+  $$('[data-goto]').forEach(btn=> btn.addEventListener('click', ()=> switchView(btn.dataset.goto)));
+  function switchView(view){
+    $$('.cp-tab').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+    $$('.cp-view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
+  }
+
+  // ---------- gate docente ----------
+  $('#cp-docente-entrar').addEventListener('click', async ()=>{
+    const code = $('#cp-docente-code').value.trim();
+    if(!code){ toast('Ingresá un código de docente.'); return; }
+    docenteCode = code;
+    await rememberDocenteCode(code);
+    await loadAllMaterias();
+    $('#cp-gate').classList.add('active');
+    $('#cp-docente-panel').style.display = 'block';
+    renderMateriaList();
+  });
+  (async function initDocenteCode(){
+    const remembered = await getRememberedDocenteCode();
+    if(remembered) $('#cp-docente-code').value = remembered;
+  })();
+
+  // ---------- crear curso ----------
+  $$('#cp-tono-chips .cp-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      $$('#cp-tono-chips .cp-chip').forEach(c=>c.classList.remove('selected'));
+      chip.classList.add('selected'); currentTono = chip.dataset.tono;
+    });
+  });
+
+  $('#cp-crear-btn').addEventListener('click', async ()=>{
+    const nombre = $('#cp-nombre').value.trim();
+    const nivel = $('#cp-nivel').value;
+    if(!nombre){ toast('Ponele un nombre al curso.'); return; }
+    const materia = {
+      id: 'm_' + Date.now() + Math.floor(Math.random()*1000),
+      docenteCode, nombre, nivel, tono: currentTono,
+      joinCode: genCode(6),
+      documentos: [],   // {nombre, texto, chars, addedAt}
+      createdAt: new Date().toISOString()
+    };
+    allMaterias.push(materia);
+    await saveAllMaterias();
+    $('#cp-nombre').value='';
+    renderMateriaList();
+    toast('Curso creado. Código para alumnos: '+materia.joinCode);
+  });
+
+  function materiaText(m){
+    return (m.documentos||[]).map(d=>`--- Fuente: ${d.nombre} ---\n${d.texto}`).join('\n\n');
+  }
+
+  function renderMateriaList(){
+    const mine = allMaterias.filter(m=>m.docenteCode===docenteCode);
+    const box = $('#cp-materia-list');
+    if(mine.length===0){ box.innerHTML = '<div class="cp-empty">Todavía no creaste ningún curso.</div>'; return; }
+    box.innerHTML = '';
+    mine.slice().reverse().forEach(m=>{
+      const div = document.createElement('div');
+      div.className = 'cp-materia-item';
+      const totalChars = (m.documentos||[]).reduce((a,d)=>a+d.chars,0);
+      div.innerHTML = `
+        <div class="top">
+          <div>
+            <h4>${escapeHtml(m.nombre)}</h4>
+            <div class="meta">${m.nivel} · tono ${m.tono} · ${(m.documentos||[]).length} documento(s) · ${totalChars} caracteres</div>
+            <div class="cp-joincode">CÓDIGO ALUMNOS: ${m.joinCode}</div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="cp-smallbtn solid" data-stats="${m.id}">Ver estadísticas</button>
+            <button class="cp-smallbtn danger" data-del="${m.id}">Eliminar curso</button>
+          </div>
+        </div>
+        <div class="cp-upload-row">
+          <label class="cp-dropzone" data-drop="${m.id}">
+            📄 Subir PDF (o arrastralo acá)
+            <input type="file" accept="application/pdf" data-pdfinput="${m.id}">
+          </label>
+        </div>
+        <div class="cp-field" style="margin-top:10px;">
+          <textarea placeholder="...o pegá texto (apuntes, programa, bibliografía) y agregalo como fuente" data-pastearea="${m.id}" style="min-height:70px;"></textarea>
+          <button class="cp-smallbtn" data-pasteadd="${m.id}" style="margin-top:6px;">Agregar texto como fuente</button>
+        </div>
+        <div class="cp-doclist" data-doclist="${m.id}"></div>
+      `;
+      box.appendChild(div);
+    });
+    // eventos
+    $$('[data-stats]', box).forEach(b=>b.addEventListener('click', ()=>{ currentMateriaId=b.dataset.stats; renderDocenteStats(currentMateriaId); }));
+    $$('[data-del]', box).forEach(b=>b.addEventListener('click', async ()=>{
+      if(!confirm('¿Eliminar este curso y sus datos?')) return;
+      allMaterias = allMaterias.filter(m=>m.id!==b.dataset.del);
+      await saveAllMaterias(); renderMateriaList();
+    }));
+    $$('[data-pdfinput]', box).forEach(inp=>inp.addEventListener('change', e=>{
+      if(e.target.files[0]) handlePdf(inp.dataset.pdfinput, e.target.files[0]);
+    }));
+    $$('[data-drop]', box).forEach(zone=>{
+      zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('drag'); });
+      zone.addEventListener('dragleave', ()=> zone.classList.remove('drag'));
+      zone.addEventListener('drop', e=>{
+        e.preventDefault(); zone.classList.remove('drag');
+        const f = e.dataTransfer.files[0];
+        if(f && f.type==='application/pdf') handlePdf(zone.dataset.drop, f);
+        else toast('Solo se admiten archivos PDF por ahora.');
+      });
+    });
+    $$('[data-pasteadd]', box).forEach(b=>b.addEventListener('click', async ()=>{
+      const ta = $(`[data-pastearea="${b.dataset.pasteadd}"]`, box);
+      const texto = ta.value.trim();
+      if(!texto){ toast('Pegá algo de texto primero.'); return; }
+      await addDocumento(b.dataset.pasteadd, 'Texto pegado — '+new Date().toLocaleDateString('es-AR'), texto);
+      ta.value='';
+    }));
+    mine.forEach(m=> renderDocList(m.id));
+  }
+
+  function renderDocList(materiaId){
+    const m = allMaterias.find(x=>x.id===materiaId);
+    const list = $(`[data-doclist="${materiaId}"]`);
+    if(!list) return;
+    if(!m.documentos || m.documentos.length===0){ list.innerHTML = '<div class="hint">Sin documentos todavía.</div>'; return; }
+    list.innerHTML = m.documentos.slice().reverse().map((d,i)=>`
+      <div class="cp-doc-row">
+        <div><div class="name">${escapeHtml(d.nombre)}</div><div class="meta">${d.chars} caracteres · agregado ${new Date(d.addedAt).toLocaleString('es-AR')}</div></div>
+        <button class="cp-smallbtn danger" data-rmdoc="${materiaId}" data-idx="${m.documentos.length-1-i}">Quitar</button>
+      </div>`).join('');
+    $$('[data-rmdoc]', list).forEach(b=>b.addEventListener('click', async ()=>{
+      const mm = allMaterias.find(x=>x.id===b.dataset.rmdoc);
+      mm.documentos.splice(parseInt(b.dataset.idx),1);
+      await saveAllMaterias(); renderMateriaList();
+    }));
+  }
+
+  async function addDocumento(materiaId, nombre, texto){
+    const m = allMaterias.find(x=>x.id===materiaId);
+    if(!m) return;
+    m.documentos = m.documentos || [];
+    m.documentos.push({ nombre, texto, chars: texto.length, addedAt: new Date().toISOString() });
+    await saveAllMaterias();
+    renderMateriaList();
+    toast('Documento agregado: '+nombre);
+  }
+
+  async function handlePdf(materiaId, file){
+    if(!window.pdfjsLib){ toast('No se pudo cargar el lector de PDF.'); return; }
+    toast('Leyendo PDF...');
+    try{
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+      let text = '';
+      for(let p=1; p<=pdf.numPages; p++){
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        text += content.items.map(it=>it.str).join(' ') + '\n';
+      }
+      text = text.trim();
+      if(!text){ toast('No se pudo extraer texto de ese PDF (¿es escaneado?).'); return; }
+      await addDocumento(materiaId, file.name, text);
+    }catch(e){
+      toast('Error leyendo el PDF: '+e.message);
+    }
+  }
+
+  // ---------- estadisticas docente ----------
+  async function renderDocenteStats(materiaId){
+    const materia = allMaterias.find(m=>m.id===materiaId);
+    const content = $('#cp-docente-content');
+    if(!materia){ content.innerHTML=''; return; }
+    const consultas = await loadConsultas(materiaId);
+    const total = consultas.length;
+    const sinMaterial = consultas.filter(c=>!c.enMaterial).length;
+    const stop = new Set(['que','como','cual','cuales','para','por','los','las','del','con','una','uno','este','esta','sobre','donde','cuando','porque','es','de','la','el','en','y','a','un','se','su','sus','me','mi']);
+    const freq = {};
+    consultas.forEach(c=>{
+      c.pregunta.toLowerCase().replace(/[¿?¡!.,;:]/g,'').split(/\s+/).forEach(w=>{
+        if(w.length>3 && !stop.has(w)) freq[w]=(freq[w]||0)+1;
+      });
+    });
+    const topTemas = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    const maxFreq = topTemas.length ? topTemas[0][1] : 1;
+    content.innerHTML = `
+      <div class="cp-section-title" style="margin-bottom:14px;"><h2 style="font-size:18px;">${escapeHtml(materia.nombre)}</h2><div class="line"></div></div>
+      <div class="cp-stat-grid">
+        <div class="cp-stat"><div class="n">${total}</div><div class="l">Consultas totales</div></div>
+        <div class="cp-stat"><div class="n">${total-sinMaterial}</div><div class="l">Con material</div></div>
+        <div class="cp-stat"><div class="n">${sinMaterial}</div><div class="l">Fuera del material</div></div>
+      </div>
+      <div id="cp-temas">${ topTemas.length ? topTemas.map(([w,n])=>`<div class="cp-topic-row"><span>${escapeHtml(w)}</span><span class="mono">${n}</span></div><div class="cp-bar" style="width:${(n/maxFreq*100).toFixed(0)}%"></div>`).join('') : '<div class="cp-empty">Todavía no hay consultas de alumnos.</div>' }</div>
+      <div class="cp-section-title" style="margin-top:24px;"><h2 style="font-size:16px;">Últimas consultas</h2><div class="line"></div></div>
+      <div>${ consultas.slice().reverse().slice(0,12).map(c=>`<div class="cp-log-row"><div class="q">${escapeHtml(c.pregunta)}</div><div class="meta">${c.enMaterial?'✓ con material':'⚠ fuera del material'} · modo ${c.modo} · ${new Date(c.timestamp).toLocaleString('es-AR')}</div></div>`).join('') }</div>
+      <button class="cp-btn ghost" id="cp-export-btn" style="margin-top:18px;">Exportar consultas (JSON)</button>
+    `;
+    $('#cp-export-btn').addEventListener('click', ()=>{
+      const blob = new Blob([JSON.stringify({curso:materia.nombre, consultas}, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download=materia.nombre.replace(/\s+/g,'_')+'_consultas.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  // ---------- alumno: entrar con codigo ----------
+  $('#cp-join-btn').addEventListener('click', async ()=>{
+    const code = $('#cp-join-code').value.trim().toUpperCase();
+    if(!code){ toast('Ingresá el código del curso.'); return; }
+    await loadAllMaterias();
+    const m = allMaterias.find(x=>x.joinCode===code);
+    if(!m){ toast('No encontramos ningún curso con ese código.'); return; }
+    alumnoMateria = m;
+    $('#cp-alumno-gate').style.display='none';
+    $('#cp-alumno-chat').style.display='block';
+    $('#cp-alumno-curso-nombre').textContent = m.nombre;
+    startChat();
+  });
+  $('#cp-salir-curso').addEventListener('click', ()=>{
+    alumnoMateria = null;
+    $('#cp-alumno-chat').style.display='none';
+    $('#cp-alumno-gate').style.display='block';
+    $('#cp-join-code').value='';
+  });
+
+  $$('.cp-mode').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      $$('.cp-mode').forEach(x=>x.classList.remove('selected'));
+      b.classList.add('selected'); currentMode = b.dataset.mode;
+    });
+  });
+
+  function startChat(){
+    const log = $('#cp-chat-log');
+    if((alumnoMateria.documentos||[]).length===0){
+      log.innerHTML = '<div class="cp-empty">Este curso todavía no tiene material cargado por el docente.</div>';
+    }else{
+      log.innerHTML = `<div class="cp-empty">Preguntale algo a la IA sobre <strong>${escapeHtml(alumnoMateria.nombre)}</strong>. Solo responde con el material del profesor.</div>`;
+    }
+  }
+
+  function appendMsg(role, opts){
+    const log = $('#cp-chat-log');
+    if(log.querySelector('.cp-empty')) log.innerHTML='';
+    const div = document.createElement('div');
+    if(role==='user'){ div.className='cp-msg user'; div.textContent = opts.text; }
+    else{
+      div.className = 'cp-msg ai ' + (opts.grounded?'grounded':'flagged');
+      const stamp = document.createElement('div');
+      stamp.className = 'cp-stamp ' + (opts.grounded?'grounded':'flagged');
+      stamp.textContent = opts.grounded ? '✓ basado en el material' : '⚠ fuera del material';
+      div.appendChild(stamp);
+      const p = document.createElement('div'); p.textContent = opts.text; div.appendChild(p);
+    }
+    log.appendChild(div); log.scrollTop = log.scrollHeight;
+    return div;
+  }
+
+  function modeInstruction(mode){
+    switch(mode){
+      case 'simple': return 'El alumno pidió que le expliques el tema de forma muy simple, como si tuviera 12 años, con ejemplos cotidianos.';
+      case 'pista': return 'El alumno no quiere la respuesta completa, quiere solo una pista, sin resolverle el tema.';
+      case 'evaluame': return 'En vez de responder directamente, generá una pregunta de evaluación sobre el tema, basada en el material.';
+      case 'resumen': return 'Generá un resumen breve y ordenado del tema consultado, basado exclusivamente en el material.';
+      default: return '';
+    }
+  }
+
+  async function sendMessage(){
+    if(!alumnoMateria) return;
+    const input = $('#cp-chat-input');
+    const text = input.value.trim();
+    if(!text) return;
+    const material = materiaText(alumnoMateria);
+    if(!material){ toast('Este curso todavía no tiene material cargado.'); return; }
+    input.value='';
+    appendMsg('user', {text});
+    $('#cp-chat-send').disabled=true; input.disabled=true;
+    const thinking = appendMsg('ai', {text:'Pensando...', grounded:true});
+
+    const system = `Sos el asistente del curso "${alumnoMateria.nombre}" (nivel: ${alumnoMateria.nivel}).
+Reglas estrictas, sin excepción:
+1. SOLO podés responder utilizando el MATERIAL AUTORIZADO de más abajo. Nunca inventes información ni bibliografía que no esté ahí.
+2. Si la consulta no puede responderse con el material, respondé EXACTAMENTE (sin agregar nada antes ni después): "Ese tema no forma parte del material proporcionado por el profesor."
+3. Nunca respondas como si fueras el profesor ni des opinión personal fuera del material.
+4. Cuando la respuesta esté en el material, indicá brevemente en qué documento o parte te basaste.
+5. Tono: ${alumnoMateria.tono==='formal'?'formal y académico':alumnoMateria.tono==='directo'?'directo y sin rodeos':'cercano y motivador'}.
+${modeInstruction(currentMode) ? '6. Instrucción del modo elegido: ' + modeInstruction(currentMode) : ''}
+
+MATERIAL AUTORIZADO (única fuente permitida):
+"""
+${material}
+"""`;
+
+    let grounded=true, respText='';
+    try{
+      const response = await fetch('/.netlify/functions/chat', {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ system, message:text })
+      });
+      const data = await response.json();
+      if(data.error){ throw new Error(data.error); }
+      respText = (data.content||[]).map(b=>b.text||'').join('\n').trim() || 'No obtuve respuesta, intentá de nuevo.';
+      grounded = !respText.toLowerCase().includes('no forma parte del material');
+    }catch(e){ respText='Hubo un error consultando al asistente. Intentá de nuevo. ('+e.message+')'; grounded=false; }
+
+    thinking.remove();
+    appendMsg('ai', {text:respText, grounded});
+    $('#cp-chat-send').disabled=false; input.disabled=false; input.focus();
+
+    const consultas = await loadConsultas(alumnoMateria.id);
+    consultas.push({pregunta:text, respuesta:respText, enMaterial:grounded, modo:currentMode, timestamp:new Date().toISOString()});
+    await saveConsultas(alumnoMateria.id, consultas);
+  }
+  $('#cp-chat-send').addEventListener('click', sendMessage);
+  $('#cp-chat-input').addEventListener('keydown', e=>{ if(e.key==='Enter') sendMessage(); });
+
+})();
+</script>
+</body>
+</html>
