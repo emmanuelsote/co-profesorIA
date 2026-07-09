@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
 <style>
   body{margin:0;}
@@ -212,13 +213,16 @@
     <div class="cp-section-title"><h2>Panel docente</h2><div class="line"></div></div>
 
     <div class="cp-gate" id="cp-gate">
-      <div class="cp-gate-row">
-        <div class="cp-field">
-          <label for="cp-docente-code">Tu código de docente</label>
-          <input type="text" id="cp-docente-code" placeholder="ej: profe_martina">
-          <div class="hint">Inventalo vos. Usá siempre el mismo para ver tus cursos la próxima vez.</div>
+      <div id="cp-gate-loggedout">
+        <p style="margin:0 0 14px; font-size:14px; color:var(--ink-soft); line-height:1.5;">Registrate con tu email para crear y gestionar tus cursos. Te va a llegar un correo de confirmación — hasta que no confirmes, no vas a poder ingresar.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="cp-btn primary" id="cp-btn-signup">Crear cuenta</button>
+          <button class="cp-btn ghost" id="cp-btn-login">Ya tengo cuenta</button>
         </div>
-        <button class="cp-btn primary" id="cp-docente-entrar">Entrar</button>
+      </div>
+      <div id="cp-gate-loggedin" class="cp-gate-who" style="display:none;">
+        <div><span class="hint">Conectado como</span><br><strong id="cp-docente-email"></strong></div>
+        <button class="cp-smallbtn" id="cp-btn-logout">Cerrar sesión</button>
       </div>
     </div>
 
@@ -350,12 +354,6 @@
   async function saveConsultas(materiaId, arr){
     await storageSet('consultas:'+materiaId, JSON.stringify(arr));
   }
-  async function rememberDocenteCode(code){
-    localStorage.setItem('mi_codigo_docente', code);
-  }
-  async function getRememberedDocenteCode(){
-    return localStorage.getItem('mi_codigo_docente') || '';
-  }
 
   // ---------- nav ----------
   $$('.cp-tab').forEach(btn=> btn.addEventListener('click', ()=> switchView(btn.dataset.view)));
@@ -365,20 +363,32 @@
     $$('.cp-view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
   }
 
-  // ---------- gate docente ----------
-  $('#cp-docente-entrar').addEventListener('click', async ()=>{
-    const code = $('#cp-docente-code').value.trim();
-    if(!code){ toast('Ingresá un código de docente.'); return; }
-    docenteCode = code;
-    await rememberDocenteCode(code);
-    await loadAllMaterias();
-    $('#cp-gate').classList.add('active');
+  // ---------- gate docente: registro/login real con Netlify Identity (email + confirmación) ----------
+  async function onDocenteLogin(user){
+    docenteCode = (user.email || '').toLowerCase();
+    $('#cp-gate-loggedout').style.display = 'none';
+    $('#cp-gate-loggedin').style.display = 'flex';
+    $('#cp-docente-email').textContent = user.email;
     $('#cp-docente-panel').style.display = 'block';
+    await loadAllMaterias();
     renderMateriaList();
-  });
-  (async function initDocenteCode(){
-    const remembered = await getRememberedDocenteCode();
-    if(remembered) $('#cp-docente-code').value = remembered;
+  }
+  function onDocenteLogout(){
+    docenteCode = null;
+    $('#cp-gate-loggedout').style.display = 'block';
+    $('#cp-gate-loggedin').style.display = 'none';
+    $('#cp-docente-panel').style.display = 'none';
+  }
+  $('#cp-btn-signup').addEventListener('click', ()=> window.netlifyIdentity && netlifyIdentity.open('signup'));
+  $('#cp-btn-login').addEventListener('click', ()=> window.netlifyIdentity && netlifyIdentity.open('login'));
+  $('#cp-btn-logout').addEventListener('click', ()=> window.netlifyIdentity && netlifyIdentity.logout());
+
+  (function initIdentity(){
+    if(!window.netlifyIdentity){ toast('No se pudo cargar el sistema de login. Recargá la página.'); return; }
+    netlifyIdentity.on('init', user => { if(user) onDocenteLogin(user); });
+    netlifyIdentity.on('login', user => { onDocenteLogin(user); netlifyIdentity.close(); });
+    netlifyIdentity.on('logout', onDocenteLogout);
+    netlifyIdentity.init();
   })();
 
   // ---------- crear curso ----------
