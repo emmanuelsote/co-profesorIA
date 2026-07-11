@@ -312,6 +312,9 @@
   let currentMode = 'normal';
   let currentTono = 'cercano';
   let alumnoMateria = null;    // materia activa del lado alumno
+  let sessionHistory = [];     // memoria de la conversación actual (se resetea al entrar a un curso)
+  const MAX_CONSULTAS_POR_CURSO = 300; // tope de preguntas por curso para el piloto, para cuidar el costo de la API
+  const MAX_MENSAJES_EN_MEMORIA = 16;  // cuántos mensajes previos se mandan como contexto (8 idas y vueltas)
 
   function toast(msg){
     const t = document.createElement('div');
@@ -598,6 +601,7 @@
   });
 
   function startChat(){
+    sessionHistory = [];
     const log = $('#cp-chat-log');
     if((alumnoMateria.documentos||[]).length===0){
       log.innerHTML = '<div class="cp-empty">Este curso todavía no tiene material cargado por el docente.</div>';
@@ -640,6 +644,14 @@
     if(!text) return;
     const material = materiaText(alumnoMateria);
     if(!material){ toast('Este curso todavía no tiene material cargado.'); return; }
+
+    // límite de consultas del piloto, para cuidar el costo de la API
+    const consultasPrevias = await loadConsultas(alumnoMateria.id);
+    if(consultasPrevias.length >= MAX_CONSULTAS_POR_CURSO){
+      appendMsg('ai', {text:'Este curso llegó al límite de consultas habilitadas para el piloto. Avisale a tu profesor para ampliarlo.', grounded:false});
+      return;
+    }
+
     input.value='';
     appendMsg('user', {text});
     $('#cp-chat-send').disabled=true; input.disabled=true;
@@ -653,17 +665,20 @@ Reglas estrictas, sin excepción:
 4. Cuando la respuesta esté en el material, indicá brevemente en qué documento o parte te basaste.
 5. Tono: ${alumnoMateria.tono==='formal'?'formal y académico':alumnoMateria.tono==='directo'?'directo y sin rodeos':'cercano y motivador'}.
 ${modeInstruction(currentMode) ? '6. Instrucción del modo elegido: ' + modeInstruction(currentMode) : ''}
+Tenés memoria de los mensajes anteriores de esta conversación: usalos para entender preguntas de seguimiento (ej. "¿y por qué?", "explicámelo de nuevo"), pero seguí sin salirte nunca del material autorizado.
 
 MATERIAL AUTORIZADO (única fuente permitida):
 """
 ${material}
 """`;
 
+    const messagesToSend = [...sessionHistory, { role:'user', content:text }];
+
     let grounded=true, respText='';
     try{
       const response = await fetch('/.netlify/functions/chat', {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ system, message:text })
+        body: JSON.stringify({ system, messages: messagesToSend })
       });
       const data = await response.json();
       if(data.error){ throw new Error(data.error); }
@@ -675,9 +690,15 @@ ${material}
     appendMsg('ai', {text:respText, grounded});
     $('#cp-chat-send').disabled=false; input.disabled=false; input.focus();
 
-    const consultas = await loadConsultas(alumnoMateria.id);
-    consultas.push({pregunta:text, respuesta:respText, enMaterial:grounded, modo:currentMode, timestamp:new Date().toISOString()});
-    await saveConsultas(alumnoMateria.id, consultas);
+    // guardar en la memoria de la sesión (recortando para no crecer indefinidamente)
+    sessionHistory.push({ role:'user', content:text });
+    sessionHistory.push({ role:'assistant', content:respText });
+    if(sessionHistory.length > MAX_MENSAJES_EN_MEMORIA){
+      sessionHistory = sessionHistory.slice(-MAX_MENSAJES_EN_MEMORIA);
+    }
+
+    consultasPrevias.push({pregunta:text, respuesta:respText, enMaterial:grounded, modo:currentMode, timestamp:new Date().toISOString()});
+    await saveConsultas(alumnoMateria.id, consultasPrevias);
   }
   $('#cp-chat-send').addEventListener('click', sendMessage);
   $('#cp-chat-input').addEventListener('keydown', e=>{ if(e.key==='Enter') sendMessage(); });
