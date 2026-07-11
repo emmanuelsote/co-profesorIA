@@ -264,6 +264,11 @@
 
     <div class="cp-gate cp-joinbox" id="cp-alumno-gate">
       <div class="cp-field">
+        <label for="cp-join-nombre">Tu nombre</label>
+        <input type="text" id="cp-join-nombre" placeholder="Nombre y apellido" style="text-transform:none; letter-spacing:normal; font-family:'Inter',sans-serif; font-weight:400; text-align:left; font-size:14px;">
+        <div class="hint">Así tu profesor sabe quién pregunta.</div>
+      </div>
+      <div class="cp-field">
         <label for="cp-join-code">Código del curso</label>
         <input type="text" id="cp-join-code" placeholder="EJ4X9K" maxlength="8">
         <div class="hint" style="text-align:center;">Pedíselo a tu profesor.</div>
@@ -306,15 +311,13 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
 
-  let allMaterias = [];       // todas las materias (shared) — se filtra en pantalla por docenteCode
-  let docenteCode = null;
-  let currentMateriaId = null; // seleccionada en panel docente
+  let misCursos = [];          // cursos del docente logueado (vienen ya filtrados por el servidor)
+  let currentMateriaId = null; // curso seleccionado en el panel docente
   let currentMode = 'normal';
   let currentTono = 'cercano';
-  let alumnoMateria = null;    // materia activa del lado alumno
+  let alumnoCurso = null;      // {materiaId, nombre, nivel, tieneMaterial}
+  let alumnoNombre = '';
   let sessionHistory = [];     // memoria de la conversación actual (se resetea al entrar a un curso)
-  const MAX_CONSULTAS_POR_CURSO = 300; // tope de preguntas por curso para el piloto, para cuidar el costo de la API
-  const MAX_MENSAJES_EN_MEMORIA = 16;  // cuántos mensajes previos se mandan como contexto (8 idas y vueltas)
 
   function toast(msg){
     const t = document.createElement('div');
@@ -323,39 +326,30 @@
     setTimeout(()=>t.remove(), 2800);
   }
   function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  function genCode(len){
-    const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let s=''; for(let i=0;i<len;i++) s+=chars[Math.floor(Math.random()*chars.length)];
-    return s;
-  }
 
-  // ---------- storage: habla con la función serverless /.netlify/functions/storage (Netlify Blobs) ----------
-  async function storageGet(key){
-    try{
-      const r = await fetch('/.netlify/functions/storage', {method:'POST', body: JSON.stringify({action:'get', key})});
-      const d = await r.json();
-      return d.value != null ? d.value : null;
-    }catch(e){ return null; }
+  // ---------- llamadas a las funciones seguras ----------
+  async function docenteApi(action, params){
+    if(!window.netlifyIdentity || !netlifyIdentity.currentUser()){
+      toast('Tu sesión expiró. Iniciá sesión de nuevo.');
+      onDocenteLogout();
+      throw new Error('No autenticado');
+    }
+    const token = await netlifyIdentity.currentUser().jwt();
+    const r = await fetch('/.netlify/functions/docente', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+      body: JSON.stringify({ action, ...params })
+    });
+    const data = await r.json();
+    if(data.error) throw new Error(data.error);
+    return data;
   }
-  async function storageSet(key, value){
-    try{
-      await fetch('/.netlify/functions/storage', {method:'POST', body: JSON.stringify({action:'set', key, value})});
-    }catch(e){ toast('No se pudo guardar. Revisá tu conexión.'); }
-  }
-
-  async function loadAllMaterias(){
-    const v = await storageGet('materias');
-    allMaterias = v ? JSON.parse(v) : [];
-  }
-  async function saveAllMaterias(){
-    await storageSet('materias', JSON.stringify(allMaterias));
-  }
-  async function loadConsultas(materiaId){
-    const v = await storageGet('consultas:'+materiaId);
-    return v ? JSON.parse(v) : [];
-  }
-  async function saveConsultas(materiaId, arr){
-    await storageSet('consultas:'+materiaId, JSON.stringify(arr));
+  async function alumnoApi(action, params){
+    const r = await fetch('/.netlify/functions/'+action, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(params)
+    });
+    return r.json();
   }
 
   // ---------- nav ----------
@@ -366,18 +360,22 @@
     $$('.cp-view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
   }
 
-  // ---------- gate docente: registro/login real con Netlify Identity (email + confirmación) ----------
-  async function onDocenteLogin(user){
-    docenteCode = (user.email || '').toLowerCase();
+  // ---------- gate docente: login real con Netlify Identity (email + confirmación) ----------
+  async function onDocenteLogin(){
+    const user = netlifyIdentity.currentUser();
+    if(!user) return;
     $('#cp-gate-loggedout').style.display = 'none';
     $('#cp-gate-loggedin').style.display = 'flex';
     $('#cp-docente-email').textContent = user.email;
     $('#cp-docente-panel').style.display = 'block';
-    await loadAllMaterias();
-    renderMateriaList();
+    try{
+      const data = await docenteApi('misCursos', {});
+      misCursos = data.cursos || [];
+      renderMateriaList();
+    }catch(e){ toast('No se pudieron cargar tus cursos: '+e.message); }
   }
   function onDocenteLogout(){
-    docenteCode = null;
+    misCursos = [];
     $('#cp-gate-loggedout').style.display = 'block';
     $('#cp-gate-loggedin').style.display = 'none';
     $('#cp-docente-panel').style.display = 'none';
@@ -388,8 +386,8 @@
 
   (function initIdentity(){
     if(!window.netlifyIdentity){ toast('No se pudo cargar el sistema de login. Recargá la página.'); return; }
-    netlifyIdentity.on('init', user => { if(user) onDocenteLogin(user); });
-    netlifyIdentity.on('login', user => { onDocenteLogin(user); netlifyIdentity.close(); });
+    netlifyIdentity.on('init', user => { if(user) onDocenteLogin(); });
+    netlifyIdentity.on('login', () => { onDocenteLogin(); netlifyIdentity.close(); });
     netlifyIdentity.on('logout', onDocenteLogout);
     netlifyIdentity.init();
   })();
@@ -406,30 +404,20 @@
     const nombre = $('#cp-nombre').value.trim();
     const nivel = $('#cp-nivel').value;
     if(!nombre){ toast('Ponele un nombre al curso.'); return; }
-    const materia = {
-      id: 'm_' + Date.now() + Math.floor(Math.random()*1000),
-      docenteCode, nombre, nivel, tono: currentTono,
-      joinCode: genCode(6),
-      documentos: [],   // {nombre, texto, chars, addedAt}
-      createdAt: new Date().toISOString()
-    };
-    allMaterias.push(materia);
-    await saveAllMaterias();
-    $('#cp-nombre').value='';
-    renderMateriaList();
-    toast('Curso creado. Código para alumnos: '+materia.joinCode);
+    try{
+      const data = await docenteApi('crearCurso', { nombre, nivel, tono: currentTono });
+      misCursos.push(data.curso);
+      $('#cp-nombre').value='';
+      renderMateriaList();
+      toast('Curso creado. Código para alumnos: '+data.curso.joinCode);
+    }catch(e){ toast('No se pudo crear el curso: '+e.message); }
   });
 
-  function materiaText(m){
-    return (m.documentos||[]).map(d=>`--- Fuente: ${d.nombre} ---\n${d.texto}`).join('\n\n');
-  }
-
   function renderMateriaList(){
-    const mine = allMaterias.filter(m=>m.docenteCode===docenteCode);
     const box = $('#cp-materia-list');
-    if(mine.length===0){ box.innerHTML = '<div class="cp-empty">Todavía no creaste ningún curso.</div>'; return; }
+    if(misCursos.length===0){ box.innerHTML = '<div class="cp-empty">Todavía no creaste ningún curso.</div>'; return; }
     box.innerHTML = '';
-    mine.slice().reverse().forEach(m=>{
+    misCursos.slice().reverse().forEach(m=>{
       const div = document.createElement('div');
       div.className = 'cp-materia-item';
       const totalChars = (m.documentos||[]).reduce((a,d)=>a+d.chars,0);
@@ -459,12 +447,14 @@
       `;
       box.appendChild(div);
     });
-    // eventos
     $$('[data-stats]', box).forEach(b=>b.addEventListener('click', ()=>{ currentMateriaId=b.dataset.stats; renderDocenteStats(currentMateriaId); }));
     $$('[data-del]', box).forEach(b=>b.addEventListener('click', async ()=>{
       if(!confirm('¿Eliminar este curso y sus datos?')) return;
-      allMaterias = allMaterias.filter(m=>m.id!==b.dataset.del);
-      await saveAllMaterias(); renderMateriaList();
+      try{
+        await docenteApi('eliminarCurso', { materiaId: b.dataset.del });
+        misCursos = misCursos.filter(m=>m.id!==b.dataset.del);
+        renderMateriaList();
+      }catch(e){ toast('No se pudo eliminar: '+e.message); }
     }));
     $$('[data-pdfinput]', box).forEach(inp=>inp.addEventListener('change', e=>{
       if(e.target.files[0]) handlePdf(inp.dataset.pdfinput, e.target.files[0]);
@@ -486,13 +476,13 @@
       await addDocumento(b.dataset.pasteadd, 'Texto pegado — '+new Date().toLocaleDateString('es-AR'), texto);
       ta.value='';
     }));
-    mine.forEach(m=> renderDocList(m.id));
+    misCursos.forEach(m=> renderDocList(m.id));
   }
 
   function renderDocList(materiaId){
-    const m = allMaterias.find(x=>x.id===materiaId);
+    const m = misCursos.find(x=>x.id===materiaId);
     const list = $(`[data-doclist="${materiaId}"]`);
-    if(!list) return;
+    if(!list || !m) return;
     if(!m.documentos || m.documentos.length===0){ list.innerHTML = '<div class="hint">Sin documentos todavía.</div>'; return; }
     list.innerHTML = m.documentos.slice().reverse().map((d,i)=>`
       <div class="cp-doc-row">
@@ -500,20 +490,23 @@
         <button class="cp-smallbtn danger" data-rmdoc="${materiaId}" data-idx="${m.documentos.length-1-i}">Quitar</button>
       </div>`).join('');
     $$('[data-rmdoc]', list).forEach(b=>b.addEventListener('click', async ()=>{
-      const mm = allMaterias.find(x=>x.id===b.dataset.rmdoc);
-      mm.documentos.splice(parseInt(b.dataset.idx),1);
-      await saveAllMaterias(); renderMateriaList();
+      try{
+        const data = await docenteApi('quitarDocumento', { materiaId: b.dataset.rmdoc, idx: parseInt(b.dataset.idx) });
+        const idx = misCursos.findIndex(x=>x.id===b.dataset.rmdoc);
+        misCursos[idx] = data.curso;
+        renderMateriaList();
+      }catch(e){ toast('No se pudo quitar: '+e.message); }
     }));
   }
 
-  async function addDocumento(materiaId, nombre, texto){
-    const m = allMaterias.find(x=>x.id===materiaId);
-    if(!m) return;
-    m.documentos = m.documentos || [];
-    m.documentos.push({ nombre, texto, chars: texto.length, addedAt: new Date().toISOString() });
-    await saveAllMaterias();
-    renderMateriaList();
-    toast('Documento agregado: '+nombre);
+  async function addDocumento(materiaId, nombreDoc, texto){
+    try{
+      const data = await docenteApi('agregarDocumento', { materiaId, nombreDoc, texto });
+      const idx = misCursos.findIndex(x=>x.id===materiaId);
+      misCursos[idx] = data.curso;
+      renderMateriaList();
+      toast('Documento agregado: '+nombreDoc);
+    }catch(e){ toast('No se pudo agregar el documento: '+e.message); }
   }
 
   async function handlePdf(materiaId, file){
@@ -536,14 +529,31 @@
     }
   }
 
-  // ---------- estadisticas docente ----------
+  // ---------- estadisticas + reporte por alumno ----------
   async function renderDocenteStats(materiaId){
-    const materia = allMaterias.find(m=>m.id===materiaId);
+    const materia = misCursos.find(m=>m.id===materiaId);
     const content = $('#cp-docente-content');
     if(!materia){ content.innerHTML=''; return; }
-    const consultas = await loadConsultas(materiaId);
+    let consultas = [];
+    try{
+      const data = await docenteApi('stats', { materiaId });
+      consultas = data.consultas || [];
+    }catch(e){ toast('No se pudieron cargar las estadísticas: '+e.message); return; }
+
     const total = consultas.length;
     const sinMaterial = consultas.filter(c=>!c.enMaterial).length;
+
+    // reporte por alumno
+    const porAlumno = {};
+    consultas.forEach(c=>{
+      const nombre = c.studentName || 'Anónimo';
+      if(!porAlumno[nombre]) porAlumno[nombre] = { total:0, sinMaterial:0, ultima:c.timestamp };
+      porAlumno[nombre].total++;
+      if(!c.enMaterial) porAlumno[nombre].sinMaterial++;
+      if(c.timestamp > porAlumno[nombre].ultima) porAlumno[nombre].ultima = c.timestamp;
+    });
+    const listaAlumnos = Object.entries(porAlumno).sort((a,b)=>b[1].total-a[1].total);
+
     const stop = new Set(['que','como','cual','cuales','para','por','los','las','del','con','una','uno','este','esta','sobre','donde','cuando','porque','es','de','la','el','en','y','a','un','se','su','sus','me','mi']);
     const freq = {};
     consultas.forEach(c=>{
@@ -553,16 +563,27 @@
     });
     const topTemas = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,6);
     const maxFreq = topTemas.length ? topTemas[0][1] : 1;
+
     content.innerHTML = `
       <div class="cp-section-title" style="margin-bottom:14px;"><h2 style="font-size:18px;">${escapeHtml(materia.nombre)}</h2><div class="line"></div></div>
       <div class="cp-stat-grid">
         <div class="cp-stat"><div class="n">${total}</div><div class="l">Consultas totales</div></div>
-        <div class="cp-stat"><div class="n">${total-sinMaterial}</div><div class="l">Con material</div></div>
+        <div class="cp-stat"><div class="n">${listaAlumnos.length}</div><div class="l">Alumnos distintos</div></div>
         <div class="cp-stat"><div class="n">${sinMaterial}</div><div class="l">Fuera del material</div></div>
       </div>
+
+      <div class="cp-section-title" style="margin-top:8px;"><h2 style="font-size:16px;">Reporte por alumno</h2><div class="line"></div></div>
+      <div>${ listaAlumnos.length ? listaAlumnos.map(([nombre,d])=>`
+        <div class="cp-log-row">
+          <div class="q">${escapeHtml(nombre)}</div>
+          <div class="meta">${d.total} consulta(s) · ${d.sinMaterial} fuera del material · última: ${new Date(d.ultima).toLocaleString('es-AR')}</div>
+        </div>`).join('') : '<div class="cp-empty">Todavía no hay alumnos consultando.</div>' }</div>
+
+      <div class="cp-section-title" style="margin-top:24px;"><h2 style="font-size:16px;">Palabras más consultadas</h2><div class="line"></div></div>
       <div id="cp-temas">${ topTemas.length ? topTemas.map(([w,n])=>`<div class="cp-topic-row"><span>${escapeHtml(w)}</span><span class="mono">${n}</span></div><div class="cp-bar" style="width:${(n/maxFreq*100).toFixed(0)}%"></div>`).join('') : '<div class="cp-empty">Todavía no hay consultas de alumnos.</div>' }</div>
+
       <div class="cp-section-title" style="margin-top:24px;"><h2 style="font-size:16px;">Últimas consultas</h2><div class="line"></div></div>
-      <div>${ consultas.slice().reverse().slice(0,12).map(c=>`<div class="cp-log-row"><div class="q">${escapeHtml(c.pregunta)}</div><div class="meta">${c.enMaterial?'✓ con material':'⚠ fuera del material'} · modo ${c.modo} · ${new Date(c.timestamp).toLocaleString('es-AR')}</div></div>`).join('') }</div>
+      <div>${ consultas.slice().reverse().slice(0,12).map(c=>`<div class="cp-log-row"><div class="q">${escapeHtml(c.studentName||'Anónimo')}: ${escapeHtml(c.pregunta)}</div><div class="meta">${c.enMaterial?'✓ con material':'⚠ fuera del material'} · modo ${c.modo} · ${new Date(c.timestamp).toLocaleString('es-AR')}</div></div>`).join('') }</div>
       <button class="cp-btn ghost" id="cp-export-btn" style="margin-top:18px;">Exportar consultas (JSON)</button>
     `;
     $('#cp-export-btn').addEventListener('click', ()=>{
@@ -573,21 +594,23 @@
     });
   }
 
-  // ---------- alumno: entrar con codigo ----------
+  // ---------- alumno: entrar con nombre + codigo ----------
   $('#cp-join-btn').addEventListener('click', async ()=>{
+    const nombre = $('#cp-join-nombre').value.trim();
     const code = $('#cp-join-code').value.trim().toUpperCase();
+    if(!nombre){ toast('Escribí tu nombre para que el profesor sepa quién pregunta.'); return; }
     if(!code){ toast('Ingresá el código del curso.'); return; }
-    await loadAllMaterias();
-    const m = allMaterias.find(x=>x.joinCode===code);
-    if(!m){ toast('No encontramos ningún curso con ese código.'); return; }
-    alumnoMateria = m;
+    const data = await alumnoApi('alumno', { joinCode: code });
+    if(data.error){ toast(data.error); return; }
+    alumnoNombre = nombre;
+    alumnoCurso = data;
     $('#cp-alumno-gate').style.display='none';
     $('#cp-alumno-chat').style.display='block';
-    $('#cp-alumno-curso-nombre').textContent = m.nombre;
+    $('#cp-alumno-curso-nombre').textContent = alumnoCurso.nombre;
     startChat();
   });
   $('#cp-salir-curso').addEventListener('click', ()=>{
-    alumnoMateria = null;
+    alumnoCurso = null;
     $('#cp-alumno-chat').style.display='none';
     $('#cp-alumno-gate').style.display='block';
     $('#cp-join-code').value='';
@@ -603,10 +626,10 @@
   function startChat(){
     sessionHistory = [];
     const log = $('#cp-chat-log');
-    if((alumnoMateria.documentos||[]).length===0){
+    if(!alumnoCurso.tieneMaterial){
       log.innerHTML = '<div class="cp-empty">Este curso todavía no tiene material cargado por el docente.</div>';
     }else{
-      log.innerHTML = `<div class="cp-empty">Preguntale algo a la IA sobre <strong>${escapeHtml(alumnoMateria.nombre)}</strong>. Solo responde con el material del profesor.</div>`;
+      log.innerHTML = `<div class="cp-empty">Hola ${escapeHtml(alumnoNombre)}, preguntale algo a la IA sobre <strong>${escapeHtml(alumnoCurso.nombre)}</strong>. Solo responde con el material del profesor.</div>`;
     }
   }
 
@@ -627,83 +650,45 @@
     return div;
   }
 
-  function modeInstruction(mode){
-    switch(mode){
-      case 'simple': return 'El alumno pidió que le expliques el tema de forma muy simple, como si tuviera 12 años, con ejemplos cotidianos.';
-      case 'pista': return 'El alumno no quiere la respuesta completa, quiere solo una pista, sin resolverle el tema.';
-      case 'evaluame': return 'En vez de responder directamente, generá una pregunta de evaluación sobre el tema, basada en el material.';
-      case 'resumen': return 'Generá un resumen breve y ordenado del tema consultado, basado exclusivamente en el material.';
-      default: return '';
-    }
-  }
-
   async function sendMessage(){
-    if(!alumnoMateria) return;
+    if(!alumnoCurso) return;
     const input = $('#cp-chat-input');
     const text = input.value.trim();
     if(!text) return;
-    const material = materiaText(alumnoMateria);
-    if(!material){ toast('Este curso todavía no tiene material cargado.'); return; }
-
-    // límite de consultas del piloto, para cuidar el costo de la API
-    const consultasPrevias = await loadConsultas(alumnoMateria.id);
-    if(consultasPrevias.length >= MAX_CONSULTAS_POR_CURSO){
-      appendMsg('ai', {text:'Este curso llegó al límite de consultas habilitadas para el piloto. Avisale a tu profesor para ampliarlo.', grounded:false});
-      return;
-    }
+    if(!alumnoCurso.tieneMaterial){ toast('Este curso todavía no tiene material cargado.'); return; }
 
     input.value='';
     appendMsg('user', {text});
     $('#cp-chat-send').disabled=true; input.disabled=true;
     const thinking = appendMsg('ai', {text:'Pensando...', grounded:true});
 
-    const system = `Sos el asistente del curso "${alumnoMateria.nombre}" (nivel: ${alumnoMateria.nivel}).
-Reglas estrictas, sin excepción:
-1. SOLO podés responder utilizando el MATERIAL AUTORIZADO de más abajo. Nunca inventes información ni bibliografía que no esté ahí.
-2. Si la consulta no puede responderse con el material, respondé EXACTAMENTE (sin agregar nada antes ni después): "Ese tema no forma parte del material proporcionado por el profesor."
-3. Nunca respondas como si fueras el profesor ni des opinión personal fuera del material.
-4. Cuando la respuesta esté en el material, indicá brevemente en qué documento o parte te basaste.
-5. Tono: ${alumnoMateria.tono==='formal'?'formal y académico':alumnoMateria.tono==='directo'?'directo y sin rodeos':'cercano y motivador'}.
-${modeInstruction(currentMode) ? '6. Instrucción del modo elegido: ' + modeInstruction(currentMode) : ''}
-Tenés memoria de los mensajes anteriores de esta conversación: usalos para entender preguntas de seguimiento (ej. "¿y por qué?", "explicámelo de nuevo"), pero seguí sin salirte nunca del material autorizado.
-
-MATERIAL AUTORIZADO (única fuente permitida):
-"""
-${material}
-"""`;
-
-    const messagesToSend = [...sessionHistory, { role:'user', content:text }];
-
     let grounded=true, respText='';
     try{
-      const response = await fetch('/.netlify/functions/chat', {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ system, messages: messagesToSend })
+      const data = await alumnoApi('ask', {
+        materiaId: alumnoCurso.materiaId,
+        studentName: alumnoNombre,
+        pregunta: text,
+        modo: currentMode,
+        historial: sessionHistory
       });
-      const data = await response.json();
       if(data.error){ throw new Error(data.error); }
-      respText = (data.content||[]).map(b=>b.text||'').join('\n').trim() || 'No obtuve respuesta, intentá de nuevo.';
-      grounded = !respText.toLowerCase().includes('no forma parte del material');
+      respText = data.respuesta || 'No obtuve respuesta, intentá de nuevo.';
+      grounded = data.limite ? false : !!data.grounded;
     }catch(e){ respText='Hubo un error consultando al asistente. Intentá de nuevo. ('+e.message+')'; grounded=false; }
 
     thinking.remove();
     appendMsg('ai', {text:respText, grounded});
     $('#cp-chat-send').disabled=false; input.disabled=false; input.focus();
 
-    // guardar en la memoria de la sesión (recortando para no crecer indefinidamente)
     sessionHistory.push({ role:'user', content:text });
     sessionHistory.push({ role:'assistant', content:respText });
-    if(sessionHistory.length > MAX_MENSAJES_EN_MEMORIA){
-      sessionHistory = sessionHistory.slice(-MAX_MENSAJES_EN_MEMORIA);
-    }
-
-    consultasPrevias.push({pregunta:text, respuesta:respText, enMaterial:grounded, modo:currentMode, timestamp:new Date().toISOString()});
-    await saveConsultas(alumnoMateria.id, consultasPrevias);
+    if(sessionHistory.length > 16) sessionHistory = sessionHistory.slice(-16);
   }
   $('#cp-chat-send').addEventListener('click', sendMessage);
   $('#cp-chat-input').addEventListener('keydown', e=>{ if(e.key==='Enter') sendMessage(); });
 
 })();
 </script>
+
 </body>
 </html>
